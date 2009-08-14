@@ -3,7 +3,7 @@ class RarFile
   BASIC_FIELDS = [:crc, :type, :flags, :header_size]
   FILE_FIELDS = [:unpacked_size, :os, :file_crc, :file_time, :rar_version, :pack_method, :name_length, :file_attrs]
   
-  BLOCK_TYPES = [:marker, :archive, :file]
+  BLOCK_TYPES = [:marker, :archive, :file, :comment, :extra, :sub, :recovery, :sign, :new_sub, :eof]
   OSES = [:msdos, :os2, :win32, :unix, :mac, :beos]
   
   def initialize(filename)
@@ -46,14 +46,16 @@ class RarFile
       
       case block[:type]
       when :marker
-        raise 'not a rar file' # TODO!
+        # raise StandardError, 'Not a valid rar file' # TODO!
       when :archive
         # do nothing
       when :file
         return_block = true
         parse_file_header(block)
+      when :eof
+        raise EOFError
       else
-        raise 'unsupported block type' unless block[:skip_if_unknown]
+        raise NotImplementedError, 'Unsupported block type' unless block[:skip_if_unknown]
       end
       
       @fh.seek(block[:header_ending], IO::SEEK_SET)
@@ -77,7 +79,7 @@ class RarFile
       end
       block[:file_name] = @fh.read(block[:name_length]).unpack("a*")[0]
       block[:pack_method] -= 0x30 # becomes 0..5
-      raise 'unsupported pack method' if block[:pack_method] != 0 # no encrypytion/compression
+      raise NotImplementedError, 'Unsupported pack method' if block[:pack_method] != 0 # no encrypytion/compression
       block[:os] = OSES[block[:os]]
     end
     
@@ -88,6 +90,6 @@ end
 
 if $0 == __FILE__
   RarFile.open(ARGV.pop) do |f|
-    puts f.list_contents
+    p f.list_contents
   end
 end
