@@ -81,10 +81,22 @@ class RarFile
       block[:pack_method] -= 0x30 # becomes 0..5
       raise NotImplementedError, 'Unsupported pack method' if block[:pack_method] != 0 # no encrypytion/compression
       block[:os] = OSES[block[:os]]
+      block[:file_time] = convert_msdos_time(block[:file_time])
     end
     
     def assign_block_fields(fields, block, mapping)
       fields.each_with_index { |value, index| block[mapping[index]] = value }
+    end
+    
+    # 16 + 16 bits time and date, bit-indexed. Add 1980 to year, multiply seconds by two.
+    def convert_msdos_time(time)
+      year  = (time >> 25) + 1980
+      month = (time >> 21) & 0x0f
+      day   = (time >> 16) & 0x1f
+      hour  = (time >> 11) & 0x1f
+      min   = (time >> 5) & 0x3f
+      sec   = (time & 0x1f) * 2
+      Time.mktime(year, month, day, hour, min, sec)
     end
 end
 
