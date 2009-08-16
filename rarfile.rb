@@ -6,13 +6,6 @@ class RarFile
   BLOCK_TYPES = [:marker, :archive, :file, :comment, :extra, :sub, :recovery, :sign, :new_sub, :eof]
   OSES = [:msdos, :os2, :win32, :unix, :mac, :beos]
   
-  # if(Pattern.matches(".+\\.[P|p]art\\d+\\.rar", filename))
-  # else if(Pattern.matches(".+\\.r((ar)|(\\d\\d)){1}", filename))
-  # else if(Pattern.matches(".+\\.\\d\\d\\d", filename))
-  
-  # Matches ".part5.rar", ".rar", ".r00", ".Part5.rar"
-  FILE_PATTERN = /\.(part\d+\.rar|r(\d+|ar))$/i
-  
   # Will return nil unless index_files has been called first
   attr_reader :files
   
@@ -57,17 +50,20 @@ class RarFile
   end
   
   private
-  
-    # TODO: not done!
+
+    # TODO: error if file doesn't exist or can't figure out next filename
     def next_filename
-      name = @fh.path
-      if name[-2..-1] == "ar"
-        name[0..-3] + "00"
-      else
-        name[0..-3] + ("%02d" % (name[-2..-1].to_i + 1))
+      new_ext = case @fh.path
+      when /\.part(\d+)\.rar$/
+        ".part#{$1.succ}.rar"
+      when /\.r(\d+)$/
+        ".r#{$1.succ}"
+      when /\.rar$/
+        ".r00"
       end
-      #       p = /\.(part(\d+)\.rar|r(\d+|ar))$/i
-      #       name.gsub(p) { |vol_num| (vol_num == "ar") ? "00" : "%02d" % (vol_num.to_i + 1) }
+      
+      # concats string of everything up until beginning of regex-match + new ext
+      "#{$`}#{new_ext}"
     end
   
     def parse_header(return_block = false)
