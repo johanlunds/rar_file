@@ -9,11 +9,6 @@ RAR is a proprietary archive file format. [Read more about it at Wikipedia](http
 WinRAR is the trialware graphical program, RAR is the shareware command-line program and unrar is the freeware command-line program with available source code. RAR and unrar can be found at http://www.rarlab.com/rar_add.htm.
 
 
-## Example
-
-*TODO*
-
-
 ## Goals
 
 This code targets the RAR2 version of the format. The code supports split archives but not compressed or encrypted archives. Only the "store" method for compression is supported. A lot of other features of the format won't be implemented. The purpose is to be able to open the kind of rar-files that are common for [scene releases in filesharing networks](http://en.wikipedia.org/wiki/Standard_(warez\)). The goals:
@@ -31,6 +26,11 @@ This code targets the RAR2 version of the format. The code supports split archiv
 Look at the doc comments and regular comments for a detailed description of the format, features etc.
 
 RarFile is minimal, has no dependencies and is platform-independent. It's implemented in the Ruby language.
+
+
+## Example
+
+*TODO*
 
 
 ## Resources used for writing this code

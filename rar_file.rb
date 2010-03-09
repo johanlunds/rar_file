@@ -72,7 +72,8 @@ class RarFile
       
       case block[:type]
       when :marker
-        # raise StandardError, 'Not a valid rar file' # TODO!
+        # 0x21726152 is same as "Rar!"
+        raise IOError, 'Not a valid rar file' unless block[:basic_fields] == [0x6152, 0x72, 0x1a21, 0x0007]
       when :archive
         @is_volume = block[:flags] & 0x1 != 0
         @is_first_volume = block[:flags] & 0x100 != 0
@@ -93,7 +94,9 @@ class RarFile
     
     def parse_basic_header(block)
       block[:header_start] = @fh.tell
-      self.class.assign_block_fields(@fh.read(7).unpack("vCvv"), block, BASIC_FIELDS)
+      # Used for checking marker header's fixed byte sequence
+      block[:basic_fields] = @fh.read(7).unpack("vCvv")
+      self.class.assign_block_fields(block[:basic_fields], block, BASIC_FIELDS)
       block[:data_size] = @fh.read(4).unpack("V")[0] if block[:flags] & 0x8000 != 0
       block[:type] = BLOCK_TYPES[block[:type] - 0x72]
       block[:skip_if_unknown] = block[:flags] & 0x4000 != 0
@@ -134,8 +137,10 @@ class RarFile
 end
 
 if $0 == __FILE__
+  require 'pp'
+  
   RarFile.open(ARGV.pop) do |rar|
     rar.index_files
-    p rar.files
+    pp rar.files
   end
 end
