@@ -1,10 +1,18 @@
-# TODO: describe rar-files. look through after code that needs commenting
+# TODO:
+# - describe rar-files. look through after code that needs commenting.
+# - add rar files for testing (both normal and split). Use RAR command-line program
 class RarFile
   BASIC_FIELDS = [:crc, :type, :flags, :header_size]
   FILE_FIELDS = [:unpacked_size, :os, :file_crc, :file_time, :rar_version, :pack_method, :name_length, :file_attrs]
   
   BLOCK_TYPES = [:marker, :archive, :file, :comment, :extra, :sub, :recovery, :sign, :new_sub, :eof]
   OSES = [:msdos, :os2, :win32, :unix, :mac, :beos]
+  
+  class RarFileError < IOError
+  end
+  
+  class NotARarFile < RarFileError
+  end
   
   # Will return nil unless index_files has been called first
   attr_reader :files
@@ -16,7 +24,6 @@ class RarFile
     @files = nil
     @is_volume = nil
     @is_first_volume = nil
-    @uses_new_numbering = nil
     @more_volumes = nil
     parse_header # skip marker block
     
@@ -38,7 +45,7 @@ class RarFile
       
     begin
       loop do
-        block = parse_header(true)
+        block = parse_header
         @fh.seek(block[:data_size], IO::SEEK_CUR) if block[:data_size] # skip block contents
         @files << block if block[:type] == :file
       end
@@ -51,7 +58,6 @@ class RarFile
   
   private
 
-    # TODO: error if file doesn't exist or can't figure out next filename
     def next_filename
       new_ext = case @fh.path
       when /\.part(\d+)\.rar$/
@@ -60,26 +66,26 @@ class RarFile
         ".r#{$1.succ}"
       when /\.rar$/
         ".r00"
+      else
+        raise RarFileError, 'Unsupported file naming'
       end
       
       # concats string of everything up until beginning of regex-match + new ext
       "#{$`}#{new_ext}"
     end
   
-    def parse_header(return_block = false)
+    def parse_header
       block = {}
       parse_basic_header(block)
       
       case block[:type]
       when :marker
         # 0x21726152 is same as "Rar!"
-        raise IOError, 'Not a valid rar file' unless block[:basic_fields] == [0x6152, 0x72, 0x1a21, 0x0007]
+        raise NotARarFile, 'Not a valid rar file' unless block[:basic_fields] == [0x6152, 0x72, 0x1a21, 0x0007]
       when :archive
         @is_volume = block[:flags] & 0x1 != 0
         @is_first_volume = block[:flags] & 0x100 != 0
-        @uses_new_numbering = block[:flags] & 0x10 != 0
       when :file
-        return_block = true
         parse_file_header(block)
       when :eof
         @more_volumes = block[:flags] & 0x01 != 0
@@ -89,7 +95,7 @@ class RarFile
       end
       
       @fh.seek(block[:header_ending], IO::SEEK_SET)
-      block if return_block
+      block
     end
     
     def parse_basic_header(block)
@@ -112,7 +118,8 @@ class RarFile
       block[:file_name] = @fh.read(block[:name_length]).unpack("a*")[0]
       block[:continued] = block[:flags] & 0x1 != 0
       block[:continues] = block[:flags] & 0x2 != 0
-      block[:is_dir] = block[:flags] & 0xe0 == 0 # TODO: unsure about this
+      # TODO: unsure about this, maybe it's in the file attrs (and different depending on block[:os])
+      block[:is_dir] = block[:flags] & 0xe0 == 0
       block[:pack_method] -= 0x30 # becomes 0..5
       raise NotImplementedError, 'Unsupported pack method' if block[:pack_method] != 0 # no encrypytion/compression
       block[:os] = OSES[block[:os]]

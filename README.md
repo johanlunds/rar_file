@@ -23,14 +23,12 @@ This code targets the RAR2 version of the format. The code supports split archiv
 - be able to list files and read their contents
 - possibly handle directories (unsure about this)
 
-Look at the doc comments and regular comments for a detailed description of the format, features etc.
-
-RarFile is minimal, has no dependencies and is platform-independent. It's implemented in the Ruby language.
-
 
 ## Example
 
 *TODO*
+
+RarFile is minimal, has no dependencies and is platform-independent. It's implemented in the Ruby language. Look at the doc comments and regular comments for a detailed description of the format, features etc.
 
 
 ## Resources used for writing this code
