@@ -45,6 +45,8 @@ RarFile is minimal, has no dependencies and is platform-independent. It's implem
 - http://www.unrarlib.org which can decompress the RAR2-format and is GPL. It's code is in C.
 - http://hem.bredband.net/catacombae/jlrarx.html, a Java library which uses unrarlib as reference. GPL and pretty messy, but good anyway.
 
+I've also used the calculator (programmer mode) and the hex editor [HexFiend.app](http://ridiculousfish.com/hexfiend/) for calculating and checking flags, bits, fields etc.
+
 
 ## License and Copyright
 

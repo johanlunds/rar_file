@@ -14,22 +14,21 @@ class RarFile
   class NotARarFile < RarFileError
   end
   
-  # Will return nil unless index_files has been called first
-  attr_reader :files
-  
   # Just like with File.open can be called with a block, after which
   # the file will be closed.
-  def initialize(filename)
+  def initialize(filename, scan_archive = false)
     @fh = File.open(filename, 'rb')
     @files = nil
+    @volumes = nil
     @is_volume = nil
     @is_first_volume = nil
     @more_volumes = nil
     parse_header # skip marker block
+    scan_archive! if scan_archive
     
     if block_given?
       yield self
-      @fh.close
+      close
     end
   end
   
@@ -38,10 +37,17 @@ class RarFile
     new(*args, &block)
   end
   
-  def index_files
+  def close
+    @volumes.each { |vol| vol.close } if @volumes
+    @fh.close
+  end
+  
+  # Will populate @files and @volumes with entries
+  def scan_archive!
     @fh.seek(7, IO::SEEK_SET)
     parse_header # skip archive block
     @files = []
+    @volumes = []
       
     begin
       loop do
@@ -50,15 +56,32 @@ class RarFile
         @files << block if block[:type] == :file
       end
     rescue EOFError
-      self.class.open(next_filename) { |next_vol| @files.concat(next_vol.index_files) } if @more_volumes
+    end    
+            
+    if first_volume_with_more?
+      volume = self
+      @volumes << volume while volume = volume.next_volume
     end
-    
-    @files
   end
   
+  protected
+  
+    # Next volume or nil
+    def next_volume
+      self.class.open(filename_for_next_volume, true) if more_volumes?
+    end
+  
   private
-
-    def next_filename
+  
+    def first_volume_with_more?
+      @is_first_volume && more_volumes?
+    end
+  
+    def more_volumes?
+      @is_volume && @more_volumes
+    end
+    
+    def filename_for_next_volume
       new_ext = case @fh.path
       when /\.part(\d+)\.rar$/
         ".part#{$1.succ}.rar"
@@ -69,7 +92,7 @@ class RarFile
       else
         raise RarFileError, 'Unsupported file naming'
       end
-      
+    
       # concats string of everything up until beginning of regex-match + new ext
       "#{$`}#{new_ext}"
     end
@@ -116,8 +139,8 @@ class RarFile
         block[:unpacked_size] += @fh.read(4).unpack("V")[0] << 32
       end
       block[:file_name] = @fh.read(block[:name_length]).unpack("a*")[0]
-      block[:continued] = block[:flags] & 0x1 != 0
-      block[:continues] = block[:flags] & 0x2 != 0
+      block[:continued_from_prev] = block[:flags] & 0x1 != 0
+      block[:continues_in_next] = block[:flags] & 0x2 != 0
       # TODO: unsure about this, maybe it's in the file attrs (and different depending on block[:os])
       block[:is_dir] = block[:flags] & 0xe0 == 0
       block[:pack_method] -= 0x30 # becomes 0..5
@@ -146,8 +169,7 @@ end
 if $0 == __FILE__
   require 'pp'
   
-  RarFile.open(ARGV.pop) do |rar|
-    rar.index_files
-    pp rar.files
+  RarFile.open(ARGV.pop, true) do |rar|
+    pp rar
   end
 end
