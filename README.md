@@ -14,6 +14,7 @@ WinRAR is the trialware graphical program, RAR is the shareware command-line pro
 This code targets the RAR2 version of the format. The code supports split archives but not compressed or encrypted archives. Only the "store" method for compression is supported. A lot of other features of the format won't be implemented. The purpose is to be able to open the kind of rar-files that are common for [scene releases in filesharing networks](http://en.wikipedia.org/wiki/Standard_(warez\)). The goals:
 
 - to be able to open rar-files in version 2 format
+- won't ever modify or create archives
 - not encrypted or compressed
 - possibly split into multiple archives
 - CRC checks won't be performed, the archive will be assumed to be fully   downloaded and OK
@@ -24,11 +25,34 @@ This code targets the RAR2 version of the format. The code supports split archiv
 - possibly handle directories (unsure about this)
 
 
-## Example
-
-*TODO*
+## Examples
 
 RarFile is minimal, has no dependencies and is platform-independent. It's implemented in the Ruby language. Look at the doc comments and regular comments for a detailed description of the format, features etc.
+
+Do a quick check:
+
+	RarFile.is_rar_file?(filename) # => true / false
+
+Opening and reading:
+
+	# Alias of #new. Works like File.open - can take a block, after which the file will be closed
+	RarFile.open(filename) do |rar|
+	  archived_files = rar.filenames # => ["file.txt", "another_file.txt"]
+	  rar.filesize(archived_files.first) # => 1234
+	  rar.read(archived_files.first) # => "Hello world!"
+	end
+	
+	RarFile.new(not_a_rar_file) # will raise RarFile::NotARarFile < IOError
+
+Inspecting:
+
+	# Inspecting a RarFile-object will show more info about the archive
+	
+	require 'pp'
+	RarFile.open(filename) do |rar|
+	  rar.filenames # The object won't contain any data until a method has been called
+	  pp rar
+	end
 
 
 ## Resources used for writing this code
