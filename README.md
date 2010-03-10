@@ -1,4 +1,4 @@
-# RarFile, an introduction
+# RarFile - introduction
 
 RAR is a proprietary archive file format. [Read more about it at Wikipedia](http://en.wikipedia.org/wiki/Rar). The compression algorithm is proprietary but the decompression can be found in unrar's source code. There is basically three versions of the format:
 

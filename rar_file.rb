@@ -17,6 +17,7 @@ class RarFile
   # Just like with File.open can be called with a block, after which
   # the file will be closed.
   def initialize(filename, scan_archive = false)
+    raise NotARarFile, 'Not a valid rar file' unless self.class.is_rar_file?(filename)
     @fh = File.open(filename, 'rb')
     @files = nil
     @volumes = nil
@@ -40,6 +41,11 @@ class RarFile
   def close
     @volumes.each { |vol| vol.close } if @volumes
     @fh.close
+  end
+  
+  # All rar files should begin with a fixed bit sequence. 0x21726152 is "Rar!" in ASCII
+  def self.is_rar_file?(filename)
+    File.open(filename, 'rb') { |fh| fh.read(7).unpack("vCvv") == [0x6152, 0x72, 0x1a21, 0x7] }
   end
   
   # Will populate @files and @volumes with entries
@@ -103,8 +109,7 @@ class RarFile
       
       case block[:type]
       when :marker
-        # 0x21726152 is same as "Rar!"
-        raise NotARarFile, 'Not a valid rar file' unless block[:basic_fields] == [0x6152, 0x72, 0x1a21, 0x0007]
+        # do nothing
       when :archive
         @is_volume = block[:flags] & 0x1 != 0
         @is_first_volume = block[:flags] & 0x100 != 0
@@ -123,9 +128,7 @@ class RarFile
     
     def parse_basic_header(block)
       block[:header_start] = @fh.tell
-      # Used for checking marker header's fixed byte sequence
-      block[:basic_fields] = @fh.read(7).unpack("vCvv")
-      self.class.assign_block_fields(block[:basic_fields], block, BASIC_FIELDS)
+      self.class.assign_block_fields(@fh.read(7).unpack("vCvv"), block, BASIC_FIELDS)
       block[:data_size] = @fh.read(4).unpack("V")[0] if block[:flags] & 0x8000 != 0
       block[:type] = BLOCK_TYPES[block[:type] - 0x72]
       block[:skip_if_unknown] = block[:flags] & 0x4000 != 0
