@@ -14,16 +14,16 @@ class RarFile
   class NotARarFile < RarFileError
   end
   
-  # Just like with File.open can be called with a block, after which
-  # the file will be closed.
+  # Just like with File.open can be called with a block, after which the file 
+  # will be closed. If the opened file isn't a valid rar file NotARarFile will be raised.
   def initialize(filename, scan_archive = false)
     raise NotARarFile, 'Not a valid rar file' unless self.class.is_rar_file?(filename)
     @fh = File.open(filename, 'rb')
-    @files = nil
-    @volumes = nil
+    @file_blocks = nil
     @is_volume = nil
     @is_first_volume = nil
     @more_volumes = nil
+    @next_volume = nil
     scan_archive! if scan_archive
     
     if block_given?
@@ -38,7 +38,7 @@ class RarFile
   end
   
   def close
-    @volumes.each { |vol| vol.close } if @volumes
+    @next_volume.close if @next_volume
     @fh.close
   end
   
@@ -47,45 +47,29 @@ class RarFile
     File.open(filename, 'rb') { |fh| fh.read(7).unpack("vCvv") == [0x6152, 0x72, 0x1a21, 0x7] }
   end
   
-  # Will populate @files and @volumes with entries
+  # Checks archive for it's contents. Rar-files are made up of multiple blocks 
+  # which all have a variable length header with different fields. All archives
+  # begin with a marker block and then an archive block. Each block may have
+  # additional contents at the end (ie file data). They can also have sub-blocks
+  # but we don't handle any of those.
+  # This method will populate the arrays named @file_blocks and @volumes. It will
+  # loop through all of the archive's blocks and put any file blocks in @file_blocks.
   def scan_archive!
     @fh.rewind
-    parse_header # skip marker block
-    parse_header # skip archive block
-    @files = []
-    @volumes = []
+    @file_blocks = []
       
     begin
       loop do
         block = parse_header
-        @fh.seek(block[:data_size], IO::SEEK_CUR) if block[:data_size] # skip block contents
-        @files << block if block[:type] == :file
+        @file_blocks << block if block[:type] == :file
       end
     rescue EOFError
-    end    
-            
-    if first_volume_with_more?
-      volume = self
-      @volumes << volume while volume = volume.next_volume
     end
+    
+    @next_volume = self.class.open(filename_for_next_volume, true) if @is_volume && @more_volumes
   end
   
-  protected
-  
-    # Next volume or nil
-    def next_volume
-      self.class.open(filename_for_next_volume, true) if more_volumes?
-    end
-  
   private
-  
-    def first_volume_with_more?
-      @is_first_volume && more_volumes?
-    end
-  
-    def more_volumes?
-      @is_volume && @more_volumes
-    end
     
     def filename_for_next_volume
       new_ext = case @fh.path
@@ -103,6 +87,9 @@ class RarFile
       "#{$`}#{new_ext}"
     end
   
+    # The different block types we handle are marker, archive, file and eof.
+    # There are other, more uncommon types but some of them can be skipped if
+    # a flag is set in the header. NotImplementedError will be raised otherwise.
     def parse_header
       block = {}
       parse_basic_header(block)
@@ -122,17 +109,19 @@ class RarFile
         raise NotImplementedError, 'Unsupported block type' unless block[:skip_if_unknown]
       end
       
-      @fh.seek(block[:header_ending], IO::SEEK_SET)
+      block[:block_ending] = block[:header_ending] + (block[:data_size] || 0)
+      # Now skip past the rest of the block so we can begin reading a new one
+      @fh.seek(block[:block_ending], IO::SEEK_SET)
       block
     end
     
     def parse_basic_header(block)
-      block[:header_start] = @fh.tell
+      block[:block_start] = @fh.tell
       self.class.assign_block_fields(@fh.read(7).unpack("vCvv"), block, BASIC_FIELDS)
       block[:data_size] = @fh.read(4).unpack("V")[0] if block[:flags] & 0x8000 != 0
       block[:type] = BLOCK_TYPES[block[:type] - 0x72]
       block[:skip_if_unknown] = block[:flags] & 0x4000 != 0
-      block[:header_ending] = block[:header_start] + block[:header_size]
+      block[:header_ending] = block[:block_start] + block[:header_size]
     end
     
     def parse_file_header(block)
@@ -141,7 +130,7 @@ class RarFile
         block[:data_size] += @fh.read(4).unpack("V")[0] << 32
         block[:unpacked_size] += @fh.read(4).unpack("V")[0] << 32
       end
-      block[:file_name] = @fh.read(block[:name_length]).unpack("a*")[0]
+      block[:filename] = @fh.read(block[:name_length]).unpack("a*")[0]
       block[:continued_from_prev] = block[:flags] & 0x1 != 0
       block[:continues_in_next] = block[:flags] & 0x2 != 0
       # TODO: unsure about this, maybe it's in the file attrs (and different depending on block[:os])
