@@ -69,6 +69,14 @@ class RarFile
     @next_volume = self.class.open(filename_for_next_volume, true) if @is_volume && @more_volumes
   end
   
+  def all_file_blocks
+    if @next_volume
+      @file_blocks + @next_volume.all_file_blocks
+    else
+      @file_blocks
+    end
+  end
+  
   private
     
     def filename_for_next_volume
@@ -139,6 +147,10 @@ class RarFile
       raise NotImplementedError, 'Unsupported pack method' if block[:pack_method] != 0 # no encrypytion/compression
       block[:os] = OSES[block[:os]]
       block[:file_time] = self.class.convert_msdos_time(block[:file_time])
+      
+      # Letting every file block have a reference to it's file object
+      # makes it very easy to read from multiple volumes
+      block[:file_handle] = @fh
     end
     
     # mapping-var is a mapping between indexes in fields and hashkeys in block
@@ -163,5 +175,6 @@ if $0 == __FILE__
   
   RarFile.open(ARGV.pop, true) do |rar|
     pp rar
+    pp rar.all_file_blocks
   end
 end
