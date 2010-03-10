@@ -16,7 +16,7 @@ class RarFile
   
   # Just like with File.open can be called with a block, after which the file 
   # will be closed. If the opened file isn't a valid rar file NotARarFile will be raised.
-  def initialize(filename, scan_archive = false)
+  def initialize(filename)
     raise NotARarFile, 'Not a valid rar file' unless self.class.is_rar_file?(filename)
     @fh = File.open(filename, 'rb')
     @file_blocks = nil
@@ -24,7 +24,6 @@ class RarFile
     @is_first_volume = nil
     @more_volumes = nil
     @next_volume = nil
-    scan_archive! if scan_archive
     
     if block_given?
       yield self
@@ -47,37 +46,68 @@ class RarFile
     File.open(filename, 'rb') { |fh| fh.read(7).unpack("vCvv") == [0x6152, 0x72, 0x1a21, 0x7] }
   end
   
-  # Checks archive for it's contents. Rar-files are made up of multiple blocks 
-  # which all have a variable length header with different fields. All archives
-  # begin with a marker block and then an archive block. Each block may have
-  # additional contents at the end (ie file data). They can also have sub-blocks
-  # but we don't handle any of those.
-  # This method will populate the arrays named @file_blocks and @volumes. It will
-  # loop through all of the archive's blocks and put any file blocks in @file_blocks.
-  def scan_archive!
-    @fh.rewind
-    @file_blocks = []
-      
-    begin
-      loop do
-        block = parse_header
-        @file_blocks << block if block[:type] == :file
-      end
-    rescue EOFError
-    end
+  def filenames
+    scan_archive!
     
-    @next_volume = self.class.open(filename_for_next_volume, true) if @is_volume && @more_volumes
+    all_file_blocks.map { |block| block[:filename] }.uniq
   end
   
-  def all_file_blocks
-    if @next_volume
-      @file_blocks + @next_volume.all_file_blocks
-    else
-      @file_blocks
+  def filesize(filename)
+    scan_archive!
+    
+    block = all_file_blocks.find { |block| block[:filename] == filename }
+    block[:unpacked_size]
+  end
+  
+  def read(filename)
+    scan_archive!
+    
+    # Note: doesn't use :continued_from_prev or :continues_in_next that every
+    # file block has. Just assumes the array is sorted instead.
+    blocks = all_file_blocks.find_all { |block| block[:filename] == filename }
+    blocks.inject("") do |data, block|
+      fh = block[:file_handle]
+      fh.seek(block[:header_ending], IO::SEEK_SET)
+      data << fh.read(block[:data_size])
     end
   end
+  
+  protected
+  
+    def all_file_blocks
+      scan_archive!
+      
+      if @next_volume
+        @file_blocks + @next_volume.all_file_blocks
+      else
+        @file_blocks
+      end
+    end
   
   private
+  
+    # Checks archive for it's contents. Rar-files are made up of multiple blocks 
+    # which all have a variable length header with different fields. All archives
+    # begin with a marker block and then an archive block. Each block may have
+    # additional contents at the end (ie file data). They can also have sub-blocks
+    # but we don't handle any of those.
+    # This method will populate the arrays named @file_blocks and @volumes. It will
+    # loop through all of the archive's blocks and put any file blocks in @file_blocks.
+    def scan_archive!
+      return if @file_blocks # return if we already have scanned once
+      @fh.rewind
+      @file_blocks = []
+
+      begin
+        loop do
+          block = parse_header
+          @file_blocks << block if block[:type] == :file
+        end
+      rescue EOFError
+      end
+
+      @next_volume = self.class.open(filename_for_next_volume) if @is_volume && @more_volumes
+    end
     
     def filename_for_next_volume
       new_ext = case @fh.path
@@ -173,8 +203,11 @@ end
 if $0 == __FILE__
   require 'pp'
   
-  RarFile.open(ARGV.pop, true) do |rar|
+  RarFile.open(ARGV.pop) do |rar|
+    names = rar.filenames
     pp rar
-    pp rar.all_file_blocks
+    pp names
+    pp rar.filesize(names.first)
+    pp rar.read(names.first)[0, 100]
   end
 end
