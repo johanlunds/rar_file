@@ -91,8 +91,8 @@ class RarFile
     # begin with a marker block and then an archive block. Each block may have
     # additional contents at the end (ie file data). They can also have sub-blocks
     # but we don't handle any of those.
-    # This method will populate the arrays named @file_blocks and @volumes. It will
-    # loop through all of the archive's blocks and put any file blocks in @file_blocks.
+    # This method will populate the array named @file_blocks. It will loop through
+    # all of the archive's blocks and put any file blocks in @file_blocks.
     def list_contents!
       @fh.rewind
       @file_blocks = []
@@ -126,7 +126,7 @@ class RarFile
   
     # The different block types we handle are marker, archive, file and eof.
     # There are other, more uncommon types but some of them can be skipped if
-    # a flag is set in the header. NotImplementedError will be raised otherwise.
+    # a flag is set in the header. NotImplementedError will be raised elsewise.
     def parse_header
       block = {}
       parse_basic_header(block)
