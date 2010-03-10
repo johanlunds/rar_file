@@ -56,13 +56,19 @@ class RarFile
     block[:unpacked_size]
   end
   
-  def read(filename)
+  # Offset have to be positive, amount should never be bigger than filesize - offset
+  def read(filename, offset = 0, amount = nil)
     # Note: doesn't use :continued_from_prev or :continues_in_next that every
     # file block has. Just assumes the array is sorted instead.
     blocks = all_file_blocks.find_all { |block| block[:filename] == filename }
+        
+    amount = blocks.first[:unpacked_size] - offset unless amount
+    
+    amount_read = 0
     blocks.inject("") do |data, block|
       fh = block[:file_handle]
       fh.seek(block[:header_ending], IO::SEEK_SET)
+      amount_read += block[:data_size]
       data << fh.read(block[:data_size])
     end
   end
