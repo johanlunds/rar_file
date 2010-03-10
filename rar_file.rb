@@ -24,7 +24,6 @@ class RarFile
     @is_volume = nil
     @is_first_volume = nil
     @more_volumes = nil
-    parse_header # skip marker block
     scan_archive! if scan_archive
     
     if block_given?
@@ -50,7 +49,8 @@ class RarFile
   
   # Will populate @files and @volumes with entries
   def scan_archive!
-    @fh.seek(7, IO::SEEK_SET)
+    @fh.rewind
+    parse_header # skip marker block
     parse_header # skip archive block
     @files = []
     @volumes = []
