@@ -20,6 +20,7 @@ class RarFile
     raise NotARarFile, 'Not a valid rar file' unless self.class.is_rar_file?(filename)
     @fh = File.open(filename, 'rb')
     @file_blocks = nil
+    @all_file_blocks = nil
     @is_volume = nil
     @is_first_volume = nil
     @more_volumes = nil
@@ -47,21 +48,15 @@ class RarFile
   end
   
   def filenames
-    scan_archive!
-    
     all_file_blocks.map { |block| block[:filename] }.uniq
   end
   
   def filesize(filename)
-    scan_archive!
-    
     block = all_file_blocks.find { |block| block[:filename] == filename }
     block[:unpacked_size]
   end
   
   def read(filename)
-    scan_archive!
-    
     # Note: doesn't use :continued_from_prev or :continues_in_next that every
     # file block has. Just assumes the array is sorted instead.
     blocks = all_file_blocks.find_all { |block| block[:filename] == filename }
@@ -74,14 +69,19 @@ class RarFile
   
   protected
   
+    # Will memoize the result if self is first volume
     def all_file_blocks
-      scan_archive!
+      return @all_file_blocks if @all_file_blocks
+      list_contents! unless @file_blocks # only list contents once
       
-      if @next_volume
+      result = if @next_volume
         @file_blocks + @next_volume.all_file_blocks
       else
         @file_blocks
       end
+      
+      @all_file_blocks = result if @is_first_volume
+      result
     end
   
   private
@@ -93,8 +93,7 @@ class RarFile
     # but we don't handle any of those.
     # This method will populate the arrays named @file_blocks and @volumes. It will
     # loop through all of the archive's blocks and put any file blocks in @file_blocks.
-    def scan_archive!
-      return if @file_blocks # return if we already have scanned once
+    def list_contents!
       @fh.rewind
       @file_blocks = []
 
