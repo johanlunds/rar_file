@@ -16,6 +16,11 @@ class RarFile
   
   # Just like with File.open can be called with a block, after which the file 
   # will be closed. If the opened file isn't a valid rar file NotARarFile will be raised.
+  # When an archive is split into multiple files ("multi-volume archive") then
+  # the constructor should be passed the first filename. This class will figure out
+  # the rest of the names and open those files too.
+  # Other than doing a simple check, no file reading will be performed until 
+  # needed.
   def initialize(filename)
     raise NotARarFile, 'Not a valid rar file' unless self.class.is_rar_file?(filename)
     @fh = File.open(filename, 'rb')
@@ -69,7 +74,10 @@ class RarFile
   
   protected
   
-    # Will memoize the result if self is first volume
+    # When a split archive is opened every RarFile-instance will have a reference
+    # to it's next volume, forming a singly-linked list. This method will
+    # be called recursively to traverse the list of volumes and collect all
+    # file blocks in each volume. This result will be memoized in the first volume.
     def all_file_blocks
       return @all_file_blocks if @all_file_blocks
       list_contents! unless @file_blocks # only list contents once
@@ -86,13 +94,13 @@ class RarFile
   
   private
   
-    # Checks archive for it's contents. Rar-files are made up of multiple blocks 
-    # which all have a variable length header with different fields. All archives
+    # Checks volume/file for it's contents. Rar-files are made up of multiple blocks 
+    # which all have a variable length header with different fields. All rar-files
     # begin with a marker block and then an archive block. Each block may have
     # additional contents at the end (ie file data). They can also have sub-blocks
     # but we don't handle any of those.
     # This method will populate the array named @file_blocks. It will loop through
-    # all of the archive's blocks and put any file blocks in @file_blocks.
+    # all of the volume's blocks and put any file blocks in @file_blocks.
     def list_contents!
       @fh.rewind
       @file_blocks = []
