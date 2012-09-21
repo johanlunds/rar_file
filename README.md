@@ -32,32 +32,32 @@ RarFile is minimal, has no dependencies and is platform-independent. It's implem
 Do a quick check:
 
 ```ruby
-	RarFile.is_rar_file?(filename) # => true / false
+RarFile.is_rar_file?(filename) # => true / false
 ```
 
 Opening and reading:
 
 ```ruby
-	# Alias of #new. Works like File.open - can take a block, after which the file will be closed
-	RarFile.open(filename) do |rar|
-	  archived_files = rar.filenames # => ["file.txt", "another_file.txt"]
-	  rar.filesize(archived_files.first) # => 1234
-	  rar.read(archived_files.first) # => "Hello world!"
-	end
-	
-	RarFile.new(not_a_rar_file) # will raise RarFile::NotARarFile < IOError
+# Alias of #new. Works like File.open - can take a block, after which the file will be closed
+RarFile.open(filename) do |rar|
+  archived_files = rar.filenames # => ["file.txt", "another_file.txt"]
+  rar.filesize(archived_files.first) # => 1234
+  rar.read(archived_files.first) # => "Hello world!"
+end
+
+RarFile.new(not_a_rar_file) # will raise RarFile::NotARarFile < IOError
 ```
 
 Inspecting:
 
 ```ruby
-	# Inspecting a RarFile-object will show more info about the archive
-	
-	require 'pp'
-	RarFile.open(filename) do |rar|
-	  rar.filenames # The object won't contain any data until a method has been called
-	  pp rar
-	end
+# Inspecting a RarFile-object will show more info about the archive
+
+require 'pp'
+RarFile.open(filename) do |rar|
+  rar.filenames # The object won't contain any data until a method has been called
+  pp rar
+end
 ```
 
 ## Resources used for writing this code
